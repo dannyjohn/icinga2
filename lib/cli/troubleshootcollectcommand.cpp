@@ -33,16 +33,13 @@
 #include <iomanip>
 #include <iostream>
 #include <time.h>
+#include <fstream>
 
 #ifdef _WIN32
 #include <sys/types.h>
 #include <sys/stat.h>
 #endif /*_WIN32*/
 
-#include <boost/exception/all.hpp>
-#include <algorithm>
-#include <iterator>
-#include <fstream>
 
 using namespace icinga;
 namespace po = boost::program_options;
@@ -65,11 +62,15 @@ static void getLatestReport(const String& filename, time_t& bestTimestamp, Strin
 	struct _stat buf;
 	if (_stat(filename.CStr(), &buf))
 		return;
+#else	
+	struct stat buf;
+	if (stat(filename.CStr(), &buf))
+	    return;
+#endif /*_WIN32*/
 	if (buf.st_mtime > bestTimestamp) {
 		bestTimestamp = buf.st_mtime;
 		bestFilename = filename;
 	}
-#endif /*_WIN32*/
 }
 
 /*Print the latest crash report to *os* */
@@ -94,13 +95,22 @@ static void printCrashReports(std::ostream& os)
 			throw ex;
 		}
 	}
+#else
+	catch (...) {
+		throw;
+        }
 #endif /*_WIN32*/
+
 		
 	if (!bestTimestamp)
-		os << "No crash logs found in " << Application::GetLocalStateDir() << "/log/icinga2/crash/" << std::endl;
+		os << "No crash logs found in " << Application::GetLocalStateDir().CStr() << "/log/icinga2/crash/" << std::endl;
 	else {
-		std::tm tm = Utility::LocalTime(bestTimestamp);
-		os << "Latest crash report is from " << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << std::endl
+		const std::tm tm = Utility::LocalTime(bestTimestamp);
+                char *tmBuf = new char[200]; //Should always be enough
+                const char *fmt = "%Y-%m-%d %H:%M:%S" ;
+                if (!strftime(tmBuf, 199, fmt, &tm))
+                    return;
+		os << "Latest crash report is from " << tmBuf << std::endl
 			<< "File: " << bestFilename << std::endl;
 		TroubleshootCollectCommand::tail(bestFilename, 20, os);
 	}
@@ -192,7 +202,7 @@ int TroubleshootCollectCommand::Run(const boost::program_options::variables_map&
 		os.clear(std::cout.rdstate());
 		os.basic_ios<char>::rdbuf(std::cout.rdbuf());
 	} else {
-		os.open(Application::GetLocalStateDir() + "/log/icinga2/troubleshooting.log",
+		os.open((Application::GetLocalStateDir() + "/log/icinga2/troubleshooting.log").CStr(),
 				std::ios::out | std::ios::trunc);
 		if (!os.is_open())
 			std::cout << "Could not open file to write";
@@ -229,3 +239,4 @@ int TroubleshootCollectCommand::Run(const boost::program_options::variables_map&
 
 	return 0;
 }
+
