@@ -62,7 +62,7 @@ static void getLatestReport(const String& filename, time_t& bestTimestamp, Strin
 	struct _stat buf;
 	if (_stat(filename.CStr(), &buf))
 		return;
-#else	
+#else
 	struct stat buf;
 	if (stat(filename.CStr(), &buf))
 	    return;
@@ -103,15 +103,15 @@ static void printCrashReports(std::ostream& os)
 
 		
 	if (!bestTimestamp)
-		os << "No crash logs found in " << Application::GetLocalStateDir().CStr() << "/log/icinga2/crash/" << std::endl;
+		os << "\n\tNo crash logs found in " << Application::GetLocalStateDir().CStr() << "/log/icinga2/crash/\n";
 	else {
 		const std::tm tm = Utility::LocalTime(bestTimestamp);
                 char *tmBuf = new char[200]; //Should always be enough
                 const char *fmt = "%Y-%m-%d %H:%M:%S" ;
                 if (!strftime(tmBuf, 199, fmt, &tm))
                     return;
-		os << "Latest crash report is from " << tmBuf << std::endl
-			<< "File: " << bestFilename << std::endl;
+		os << "\n\tLatest crash report is from " << tmBuf
+			<< "\n\tFile: " << bestFilename << std::endl;
 		TroubleshootCollectCommand::tail(bestFilename, 20, os);
 	}
 }
@@ -174,7 +174,7 @@ static void printLogTail(const String& objectfile, std::ostream& os)
 				String key = kv.first;
 				Value val = kv.second;
 				if (Utility::Match(key, "path")) {
-					os << "Found Log " << object->Get("name") << " path: " << val << std::endl;
+					os << "\n\tFound Log " << object->Get("name") << " at path: " << val << std::endl;
 					String valS = val;
 					if (!TroubleshootCollectCommand::tail(val, 10, os))
 						os << val << " either does not exist or is empty" << std::endl;
@@ -204,19 +204,22 @@ int TroubleshootCollectCommand::Run(const boost::program_options::variables_map&
 	} else {
 		os.open((Application::GetLocalStateDir() + "/log/icinga2/troubleshooting.log").CStr(),
 				std::ios::out | std::ios::trunc);
-		if (!os.is_open())
-			std::cout << "Could not open file to write";
+		if (!os.is_open()) {
+			std::cout << "Could not open " << (Application::GetLocalStateDir() + "/log/icinga2/troubleshooting.log") << " to write"
+				<< std::endl;
+			return 3;
+		}
 	}
 
 	String appName = Utility::BaseName(Application::GetArgV()[0]);
 
 	os << appName << " -- Troubleshooting help:" << std::endl
-		<< "When looking for help fixing your Application please provide this information."
-		<< std::endl;
+		<< "Should you run in problems with icinga please add this file to your help request\n";
 
 	if (appName.GetLength() > 3 && appName.SubStr(0, 3) == "lt-")
 		appName = appName.SubStr(3, appName.GetLength() - 3);
 
+	os << std::endl;
 	Application::DisplayInfoMessage(os);
 	os << std::endl;
 	FeatureUtility::ListFeatures(os);
@@ -226,7 +229,7 @@ int TroubleshootCollectCommand::Run(const boost::program_options::variables_map&
 
 	if (!Utility::PathExists(objectfile)) {
 		os << "Cannot open objects file '" << Application::GetObjectsPath() << "'."
-			<< "Run 'icinga2 daemon -C' to validate config and generate the cache file.";
+			<< "Run 'icinga2 daemon -C' to validate config and generate the cache file.\n";
 	} else
 		printLogTail(objectfile, os);
 
