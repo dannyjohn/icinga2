@@ -26,6 +26,7 @@
 #include "base/json.hpp"
 #include "base/objectlock.hpp"
 #include "base/exception.hpp"
+#include "config/configitem.hpp"
 
 #include <boost/filesystem.hpp>
 #include <boost/circular_buffer.hpp>
@@ -206,7 +207,10 @@ static void printConfigTree(const String& objectfile, std::ostream& os)
 
 static void ConfigValid(std::ostream& os) 
 {
-
+	std::string message = (ConfigItem::CommitItems() ?
+							"Failed to validate config, check the log for further information\n" :
+							"Successfuly validated config, check the log for additional information\n");
+	os << message;
 }
 
 void TroubleshootCollectCommand::InitParameters(boost::program_options::options_description& visibleDesc,
@@ -248,6 +252,8 @@ int TroubleshootCollectCommand::Run(const boost::program_options::variables_map&
 	os << std::endl;
 	FeatureUtility::ListFeatures(os);
 	os << std::endl;
+
+	ConfigValid(os);
 
 	String objectfile = Application::GetObjectsPath();
 
