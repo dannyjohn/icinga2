@@ -34,6 +34,7 @@
 #include <iostream>
 #include <time.h>
 #include <fstream>
+#include <set>
 
 #ifdef _WIN32
 #include <sys/types.h>
@@ -137,9 +138,8 @@ int TroubleshootCollectCommand::tail(const String& file, int numLines, std::ostr
 		numLines = lines;
 
 	for (int k = 0; k < numLines; k++)
-		os << ringBuf[k] << std::endl;
+		os << '\t' << ringBuf[k] << std::endl;
 
-	os << std::endl;
 	text.close();
 	return numLines;
 }
@@ -163,10 +163,6 @@ static void printLogTail(const String& objectfile, std::ostream& os)
 		if (Utility::Match(type, "FileLogger")) {
 			Dictionary::Ptr debug_hints = object->Get("debug_hints");
 			Dictionary::Ptr properties = object->Get("properties");
-			Dictionary::Ptr debug_hint_props;
-
-			if (debug_hints)
-				debug_hint_props = debug_hints->Get("properties");
 
 			ObjectLock olock(properties);
 			BOOST_FOREACH(const Dictionary::Pair& kv, properties)
@@ -174,16 +170,43 @@ static void printLogTail(const String& objectfile, std::ostream& os)
 				String key = kv.first;
 				Value val = kv.second;
 				if (Utility::Match(key, "path")) {
-					os << "\n\tFound Log " << object->Get("name") << " at path: " << val << std::endl;
-					String valS = val;
+					os << "\nFound Log " << object->Get("name") << " at path: " << val << "\n\n";
 					if (!TroubleshootCollectCommand::tail(val, 10, os))
-						os << val << " either does not exist or is empty" << std::endl;
+						os << '\t' << val << " either does not exist or is empty\n";
 				}
 			}
 		}
 	}
 
 	printCrashReports(os);
+}
+
+static void printConfigTree(const String& objectfile, std::ostream& os)
+{
+	std::fstream fp;
+	std::set<String> configSet;
+	fp.open(objectfile.CStr(), std::ios_base::in);
+
+	StdioStream::Ptr sfp = new StdioStream(&fp, false);
+	String message;
+
+	while (NetString::ReadStringFromStream(sfp, &message)) {
+			Dictionary::Ptr object = JsonDecode(message);
+			Array::Ptr debug_info = object->Get("debug_info");
+			if (debug_info)
+				configSet.insert(debug_info->Get(0));
+	}
+
+	os << "Found the following config files used by objects:\n";
+	for (std::set<String>::iterator it = configSet.begin();
+			it != configSet.end(); it++)
+		os << '\t' << *it << '\n';
+	os << std::endl;
+}
+
+static void ConfigValid(std::ostream& os) 
+{
+
 }
 
 void TroubleshootCollectCommand::InitParameters(boost::program_options::options_description& visibleDesc,
@@ -211,6 +234,7 @@ int TroubleshootCollectCommand::Run(const boost::program_options::variables_map&
 		}
 	}
 
+
 	String appName = Utility::BaseName(Application::GetArgV()[0]);
 
 	os << appName << " -- Troubleshooting help:" << std::endl
@@ -230,8 +254,11 @@ int TroubleshootCollectCommand::Run(const boost::program_options::variables_map&
 	if (!Utility::PathExists(objectfile)) {
 		os << "Cannot open objects file '" << Application::GetObjectsPath() << "'."
 			<< "Run 'icinga2 daemon -C' to validate config and generate the cache file.\n";
-	} else
+	} else {
+		
+		printConfigTree(objectfile, os);
 		printLogTail(objectfile, os);
+	}
 
 	std::cout << "Finished collection";
 	if (!vm.count("console")) {
